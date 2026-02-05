@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Tetris - Fixed Sound & Responsive Score</title>
+    <style>
+        body { 
+            background: #1a1a1d; color: #fff; font-family: 'Malgun Gothic', sans-serif;
+            margin: 0; overflow: hidden; display: flex; justify-content: center; align-items: center;
+            height: 100vh; width: 100vw;
+        }
+        #main-layout { display: flex; align-items: flex-start; gap: 20px; position: relative; }
+        .left-panel { display: flex; flex-direction: column; gap: 15px; width: 150px; }
+        
+        .ui-box {
+            background: rgba(0, 0, 0, 0.8); padding: 15px; border-radius: 8px; 
+            border: 1px solid #333; text-align: center;
+        }
+        
+        .score-board { 
+            border: 2px solid #ffca28; 
+            color: #ffca28; 
+            min-height: 110px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        #score { font-size: 28px; font-weight: bold; margin: 5px 0; display: block; }
+
+        .zoom-btn {
+            background: #ffca28; color: #000; border: none; padding: 8px 12px;
+            border-radius: 4px; font-size: 12px; font-weight: bold; cursor: pointer;
+            margin-top: 10px; transition: 0.2s; width: 100%;
+        }
+        .zoom-btn:hover { background: #ffd54f; transform: scale(1.05); }
+
+        #full-score-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #000; display: none; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 9999; cursor: pointer;
+        }
+
+        #full-score-text { 
+            font-size: min(25vw, 400px); 
+            font-weight: 900; 
+            color: #ffca28; 
+            text-shadow: 0 0 80px rgba(255, 202, 40, 0.4);
+            white-space: nowrap; 
+            overflow: visible;
+            display: inline-block;
+            max-width: 95vw;
+            text-align: center;
+            line-height: 1;
+        }
+
+        #next-canvas { background: #000; margin-top: 5px; }
+        .speed-btn {
+            padding: 6px 12px; font-size: 12px; cursor: pointer; border: 1px solid #555;
+            background: #333; color: white; border-radius: 4px; margin: 2px;
+        }
+        .speed-btn.active { background: #ffca28; color: #000; border-color: #ffca28; font-weight: bold; }
+        
+        canvas#tetris { background: #000; box-shadow: 0 0 50px rgba(0,0,0,0.9); border: 3px solid #444; }
+        .controls { 
+            background: rgba(0, 0, 0, 0.8); padding: 15px; border-radius: 8px; 
+            font-size: 13px; border: 1px solid #333; min-width: 180px;
+        }
+        .controls h3 { margin: 0 0 10px 0; font-size: 15px; color: #ffca28; text-align: center; }
+        .key-row { display: flex; justify-content: space-between; margin-bottom: 10px; align-items: center; gap: 10px; }
+        .key { border: 1px solid #fff; padding: 2px 6px; border-radius: 4px; background: #333; font-weight: bold; font-size: 11px; }
+        
+        #game-over-text {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 40px; font-weight: bold; color: #ff5252; text-shadow: 0 0 20px rgba(255,82,82,0.8);
+            display: none; z-index: 2000;
+        }
+        #start-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 3000;
+        }
+        .btn { padding: 12px 25px; font-size: 16px; font-weight: bold; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        #start-btn { background: linear-gradient(45deg, #ffca28, #ff8f00); }
+        #reset-btn { position: absolute; bottom: 20px; left: 20px; background: #d32f2f; }
+    </style>
+</head>
+<body>
+
+    <div id="start-overlay">
+        <h1 style="color:#ffca28; letter-spacing: 5px;">MUSIC BOX TETRIS</h1>
+        <button id="start-btn" class="btn" onclick="startGame()">게임 시작</button>
+    </div>
+
+    <div id="full-score-overlay" onclick="toggleFullScore(false)">
+        <div style="font-size: 24px; color: #aaa; margin-bottom: 20px; letter-spacing: 2px;">CURRENT SCORE</div>
+        <div id="full-score-text">0</div>
+        <div style="margin-top: 50px; color: #444; font-size: 14px;">화면을 클릭하면 게임으로 돌아갑니다</div>
+    </div>
+
+    <div id="main-layout">
+        <div class="left-panel">
+            <div class="ui-box score-board">
+                <div style="font-size: 11px; color: #aaa;">SCORE</div>
+                <span id="score">0</span>
+                <button class="zoom-btn" onclick="toggleFullScore(true)">크게 보기 🔍</button>
+            </div>
+            <div id="next-container" class="ui-box">
+                <div style="font-size: 11px; color: #ffca28;">NEXT</div>
+                <canvas id="next-canvas" width="80" height="80"></canvas>
+            </div>
+            <div class="ui-box">
+                <div style="font-size: 11px; color: #aaa; margin-bottom: 8px;">SPEED</div>
+                <button id="speed1" class="speed-btn active" onclick="setSpeed(1000, 1)">1단계</button>
+                <button id="speed2" class="speed-btn" onclick="setSpeed(400, 2)">2단계</button>
+            </div>
+        </div>
+        <div id="game-container">
+            <div id="game-over-text">GAME OVER</div>
+            <canvas id="tetris"></canvas>
+        </div>
+        <div class="controls">
+            <h3>🎮 조작 방법</h3>
+            <div class="key-row"><span>좌우 이동</span><span class="key">← →</span></div>
+            <div class="key-row"><span>하강</span><span class="key">↓</span></div>
+            <div class="key-row"><span>모양 회전</span><span class="key">↑ / Space</span></div>
+        </div>
+    </div>
+
+    <button id="reset-btn" class="btn" onclick="resetGame()">다시 시작</button>
+
+<script>
+    const canvas = document.getElementById('tetris');
+    const context = canvas.getContext('2d');
+    const nextCanvas = document.getElementById('next-canvas');
+    const nextContext = nextCanvas.getContext('2d');
+    const scoreElement = document.getElementById('score');
+    const gameOverDisplay = document.getElementById('game-over-text');
+
+    const COLS = 15, ROWS = 20;
+    let blockSize = 0, score = 0, dropInterval = 1000, dropCounter = 0, lastTime = 0, isGameOver = false;
+
+    function toggleFullScore(show) {
+        const overlay = document.getElementById('full-score-overlay');
+        const fullText = document.getElementById('full-score-text');
+        if (show) {
+            fullText.innerText = score;
+            overlay.style.display = 'flex';
+        } else {
+            overlay.style.display = 'none';
+        }
+    }
+
+    // --- 🎼 사운드 시스템 (복구됨) ---
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    function playNote(freq, start, duration = 1.5, type = 'sine', volume = 0.12) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type; osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0, start); gain.gain.linearRampToValueAtTime(volume, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(start); osc.stop(start + duration);
+    }
+
+    // ⭐ 층 제거 시 효과음 원상복구
+    function playExplosionSfx() {
+        const duration = 0.4;
+        const bufferSize = audioCtx.sampleRate * duration;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        // 고주파에서 저주파로 빠르게 떨어지는 효과 (타격감)
+        filter.frequency.setValueAtTime(1500, audioCtx.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + duration);
+
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        noise.start();
+    }
+
+    function playGameOverSfx() {
+        const now = audioCtx.currentTime;
+        [220, 164, 110].forEach((f, i) => { playNote(f, now + (i * 0.2), 0.8, 'triangle', 0.2); });
+    }
+
+    const melody = [659.25, 523.25, 587.33, 392.00, 440.00, 523.25, 493.88, 392.00];
+    let noteIdx = 0;
+    function playBGM() {
+        if(isGameOver) return;
+        playNote(melody[noteIdx], audioCtx.currentTime);
+        noteIdx = (noteIdx + 1) % melody.length;
+        setTimeout(playBGM, 1200);
+    }
+
+    // --- 🎮 게임 로직 ---
+    const colors = [null, '#FF7043', '#4FC3F7', '#81C784', '#BA68C8', '#FFB74D', '#FFF176', '#64B5F6'];
+    const arena = Array.from({length: ROWS}, () => new Array(COLS).fill(0));
+    const player = { pos: {x: 0, y: 0}, matrix: null, next: null };
+
+    function createPiece(type) {
+        if (type === 'I') return [[0,1,0,0],[0,1,0,0],[0,1,0,0],[0,1,0,0]];
+        if (type === 'L') return [[0,2,0],[0,2,0],[0,2,2]];
+        if (type === 'J') return [[0,3,0],[0,3,0],[3,3,0]];
+        if (type === 'O') return [[4,4],[4,4]];
+        if (type === 'Z') return [[5,5,0],[0,5,5],[0,0,0]];
+        if (type === 'S') return [[0,6,6],[6,6,0],[0,0,0]];
+        if (type === 'T') return [[0,7,0],[7,7,7],[0,0,0]];
+    }
+
+    function drawMatrix(matrix, offset, ctx) {
+        matrix.forEach((row, y) => {
+            row.forEach((value, x) => { if (value !== 0) { ctx.fillStyle = colors[value]; ctx.fillRect(x + offset.x, y + offset.y, 1, 1); } });
+        });
+    }
+
+    function drawNext() {
+        nextContext.fillStyle = '#000'; nextContext.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+        nextContext.save(); nextContext.scale(20, 20);
+        const offsetX = (4 - player.next[0].length) / 2, offsetY = (4 - player.next.length) / 2;
+        drawMatrix(player.next, {x: offsetX, y: offsetY}, nextContext);
+        nextContext.restore();
+    }
+
+    function playerRotate() {
+        const m = player.matrix;
+        const rotated = m[0].map((_, i) => m.map(row => row[i]).reverse());
+        const oldMatrix = player.matrix;
+        player.matrix = rotated;
+        let offset = 1;
+        while (collide(arena, player)) {
+            player.pos.x += offset;
+            offset = -(offset + (offset > 0 ? 1 : -1));
+            if (offset > player.matrix[0].length) { player.matrix = oldMatrix; return; }
+        }
+    }
+
+    function playerReset() {
+        const pieces = 'ILJOTSZ';
+        if (!player.next) player.next = createPiece(pieces[Math.random() * pieces.length | 0]);
+        player.matrix = player.next; player.next = createPiece(pieces[Math.random() * pieces.length | 0]);
+        player.pos.y = 0; player.pos.x = (COLS / 2 | 0) - (player.matrix[0].length / 2 | 0);
+        if (collide(arena, player)) { isGameOver = true; gameOverDisplay.style.display = 'block'; playGameOverSfx(); }
+        drawNext();
+    }
+
+    function collide(arena, player) {
+        const [m, o] = [player.matrix, player.pos];
+        for (let y = 0; y < m.length; ++y) {
+            for (let x = 0; x < m[y].length; ++x) if (m[y][x] !== 0 && (arena[y + o.y] && arena[y + o.y][x + o.x]) !== 0) return true;
+        }
+        return false;
+    }
+
+    function arenaSweep() {
+        let rowCount = 0;
+        outer: for (let y = arena.length - 1; y > 0; --y) {
+            for (let x = 0; x < arena[y].length; ++x) if (arena[y][x] === 0) continue outer;
+            arena.splice(y, 1); arena.unshift(new Array(COLS).fill(0));
+            ++y; rowCount++;
+        }
+        if (rowCount > 0) {
+            score += (rowCount * rowCount) * 100;
+            scoreElement.innerText = score;
+            playExplosionSfx(); // 복구된 사운드 호출
+        }
+    }
+
+    function playerDrop() {
+        if (isGameOver) return;
+        player.pos.y++;
+        if (collide(arena, player)) {
+            player.pos.y--;
+            player.matrix.forEach((row, y) => {
+                row.forEach((value, x) => { if (value !== 0) arena[y + player.pos.y][x + player.pos.x] = value; });
+            });
+            playerReset(); arenaSweep();
+        }
+        dropCounter = 0;
+    }
+
+    function update(time = 0) {
+        if (isGameOver) return;
+        const deltaTime = time - lastTime; lastTime = time; dropCounter += deltaTime;
+        if (dropCounter > dropInterval) playerDrop();
+        context.fillStyle = '#000'; context.fillRect(0, 0, canvas.width, canvas.height);
+        drawMatrix(arena, {x: 0, y: 0}, context); drawMatrix(player.matrix, player.pos, context);
+        requestAnimationFrame(update);
+    }
+
+    function startGame() {
+        document.getElementById('start-overlay').style.display = 'none';
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        playBGM(); resetGame();
+    }
+
+    function resetGame() {
+        isGameOver = false; gameOverDisplay.style.display = 'none';
+        arena.forEach(row => row.fill(0)); score = 0; scoreElement.innerText = 0;
+        player.next = null; playerReset(); lastTime = performance.now(); update();
+    }
+
+    function setSpeed(ms, level) {
+        dropInterval = ms;
+        document.getElementById('speed1').classList.toggle('active', level === 1);
+        document.getElementById('speed2').classList.toggle('active', level === 2);
+    }
+
+    function resizeCanvas() {
+        const h = window.innerHeight - 100;
+        blockSize = Math.min(h / ROWS, (window.innerWidth - 450) / COLS);
+        canvas.width = blockSize * COLS; canvas.height = blockSize * ROWS;
+        context.scale(blockSize, blockSize);
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    document.addEventListener('keydown', e => {
+        if (isGameOver) return;
+        if (e.keyCode === 37) { player.pos.x--; if (collide(arena, player)) player.pos.x++; }
+        else if (e.keyCode === 39) { player.pos.x++; if (collide(arena, player)) player.pos.x--; }
+        else if (e.keyCode === 40) playerDrop();
+        else if (e.keyCode === 38 || e.keyCode === 32) { e.preventDefault(); playerRotate(); }
+    });
+</script>
+</body>
+</html>
